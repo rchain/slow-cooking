@@ -1,5 +1,11 @@
 ---
 
+- name: Install Docker package
+  become: yes
+  package:
+    name: docker.io
+    state: present
+
 - name: Create {{ drone_user }} user
   become: yes
   user:
@@ -8,6 +14,7 @@
     groups: docker,lxd
 
 - name: Create {{ drone_checkout_dir }}
+  become: yes
   file:
     path: "{{ drone_checkout_dir }}"
     state: directory
@@ -52,10 +59,23 @@
   systemd:
     daemon_reload: true
 
+- name: Install Docker PIP package
+  become: yes
+  package:
+    name: python-docker
+    state: present
+
 - name: Create docker network
+  become: yes
   docker_network:
-    name: perf_harness
+    name: drone
     driver: bridge
+
+- name: Install docker-compose package
+  become: yes
+  package:
+    name: docker-compose
+    state: present
 
 - name: Run systemd unit at boot
   become: yes
