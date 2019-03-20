@@ -1,0 +1,10 @@
+[Unit]
+Requires=docker.service
+After=docker.service
+
+[Service]
+User={{ drone_user }}
+EnvironmentFile={{ drone_checkout_dir }}/drone.env
+ExecStart=/usr/bin/docker-compose --file {{ drone_checkout_dir }}/drone/docker-compose.yml up
+ExecStopPost=/usr/bin/docker-compose --file {{ drone_checkout_dir }}/drone/docker-compose.yml down
+Restart=on-failure

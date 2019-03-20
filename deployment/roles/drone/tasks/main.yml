@@ -1,0 +1,74 @@
+---
+
+- name: Create {{ drone_user }} user
+  become: yes
+  user:
+    name: "{{ drone_user }}"
+    create_home: no
+    groups: docker,lxd
+
+- name: Create {{ drone_checkout_dir }}
+  file:
+    path: "{{ drone_checkout_dir }}"
+    state: directory
+    group: "{{ deployers_group }}"
+    mode: u=rwx,g=rwx,o=r
+
+- name: Checkout runtime files
+  git:
+    repo: "{{ deployment_repo }}"
+    clone: yes
+    update: yes
+    force: yes
+    dest: "{{ drone_checkout_dir }}"
+    version: "{{ drone_checkout_commit }}"
+
+- name: Render drone.env
+  template:
+    src: drone.env.j2
+    dest: "{{ drone_checkout_dir }}/drone.env"
+
+- name: Render drone.service
+  template:
+    src: drone.service.j2
+    dest: "{{ drone_checkout_dir }}/drone.service"
+
+- name: Fix attibutes
+  become: yes
+  file:
+    path: "{{ drone_checkout_dir }}"
+    owner: "{{ drone_user }}"
+    recurse: yes
+
+- name: Symlink drone.service file
+  become: yes
+  file:
+    src: "{{ drone_checkout_dir }}/drone.service"
+    dest: /etc/systemd/system/drone.service
+    state: link
+
+- name: Register systemd unit
+  become: yes
+  systemd:
+    daemon_reload: true
+
+- name: Create docker network
+  docker_network:
+    name: perf_harness
+    driver: bridge
+
+- name: Run systemd unit at boot
+  become: yes
+  systemd:
+    name: drone
+    enabled: yes
+
+- name: Kill running jobs
+  become: yes
+  shell: docker ps --filter='name=_step_' --quiet | xargs --no-run-if-empty docker kill
+
+- name: Restart systemd service
+  become: yes
+  systemd:
+    name: drone
+    state: restarted
