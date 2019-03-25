@@ -1,0 +1,37 @@
+{
+    "_meta": {
+        "hash": {
+            "sha256": "2b862dce855d43ba507b2ef9cbb5e6c33e8464e57596bf6e01c677b28bce78c6"
+        },
+        "pipfile-spec": 6,
+        "requires": {
+            "python_version": "3.7"
+        },
+        "sources": [
+            {
+                "name": "pypi",
+                "url": "https://pypi.org/simple",
+                "verify_ssl": true
+            }
+        ]
+    },
+    "default": {
+        "gidgethub": {
+            "hashes": [
+                "sha256:52119435ba73ddd5e697dae7bec8b93a048bc738720b81691ebd4b4d81d2d762",
+                "sha256:a6f9ac2300cc9d88c3523ef9a5acff022c9f6b5615e4b969e679bc819757646e"
+            ],
+            "index": "pypi",
+            "version": "==3.1.0"
+        },
+        "uritemplate": {
+            "hashes": [
+                "sha256:01c69f4fe8ed503b2951bef85d996a9d22434d2431584b5b107b2981ff416fbd",
+                "sha256:1b9c467a940ce9fb9f50df819e8ddd14696f89b9a8cc87ac77952ba416e0a8fd",
+                "sha256:c02643cebe23fc8adb5e6becffe201185bf06c40bda5c0b4028a93f1527d011d"
+            ],
+            "version": "==3.0.0"
+        }
+    },
+    "develop": {}
+}
