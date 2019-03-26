@@ -1,0 +1,32 @@
+__buildenv: &buildenv
+  image: rchain/buildenv:latest
+
+
+__sbtcompileenv: &sbtcompileenv
+  <<: *buildenv
+  environment:
+    - _JAVA_OPTIONS=-Xms2G -Xmx4G -Xss2m -XX:MaxMetaspaceSize=1G
+                    -Dsbt.task.timings=true -Dsbt.task.timings.on.shutdown=true -Dsbt.task.timings.threshold=2000
+  volumes:
+    - /var/cache/rchain-build/.sbt:/root/.sbt
+    - /var/cache/rchain-build/.ivy2:/root/.ivy2
+
+
+clone:
+  git-clone:
+    <<: *buildenv
+    commands:
+      - git clone --branch=dev https://github.com/rchain/rchain.git .
+      - git rev-parse HEAD
+
+
+pipeline:
+  compile:
+    <<: *sbtcompileenv
+    commands:
+      - sbt update rholang/bnfc:generate test:compile
+
+  slowcooker:
+    <<: *sbtcompileenv
+    commands:
+      - sbt slowcooker:test
