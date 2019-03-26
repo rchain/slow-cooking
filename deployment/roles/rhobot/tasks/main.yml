@@ -53,6 +53,18 @@
   args:
     chdir: "{{ rhobot_checkout_dir }}/rhobot"
 
+- name: Download Drone CLI client
+  become: yes
+  become_user: "{{ rhobot_user }}"
+  shell: curl -L https://github.com/drone/drone-cli/releases/download/v1.0.7/drone_linux_amd64.tar.gz | tar zx
+  args:
+    chdir: "/home/{{ rhobot_user }}/.local/bin"
+
+- name: Render environment file
+  template:
+    src: rhobot.env.j2
+    dest: "{{ rhobot_checkout_dir }}/drone.env"
+
 - name: Render systemd unit file
   become: yes
   template:
