@@ -1,0 +1,8 @@
+[Unit]
+Requires=docker.service
+After=docker.service
+
+[Service]
+User=rhobot
+WorkingDirectory={{ rhobot_checkout_dir }}/rhobot
+ExecStart=/home/{{ rhobot_user }}/.local/bin/pipenv run {{ rhobot_checkout_dir }}/rhobot/rhobot.py
