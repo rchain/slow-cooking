@@ -4,6 +4,7 @@ import sys
 import asyncio
 import importlib
 import traceback
+import subprocess
 
 import aiohttp
 from aiohttp import web
@@ -17,27 +18,30 @@ router = routing.Router()
 cache = cachetools.LRUCache(maxsize=500)
 
 
+def get_last_build_number():
+    command = 'drone build ls --format {{.Number}} --limit 1 rchain/rchain'
+    return subprocess.check_output(command)
+
+
+def start_drone_build(repo, proto_build_number):
+    command = 'drone build restart {} {}'.format(repo, proto_build_number)
+    return subprocess.check_output(command)
+
+
 @router.register('push', ref='refs/heads/dev')
 def pushed_to_dev(event, gh, *arg, **kwargs):
     print(event)
 
 
-@router.register("pull_request", action="opened")
-async def opened_pr(event, gh, *arg, **kwargs):
-    """Mark new PRs as needing a review."""
-    pull_request = event.data["pull_request"]
-    await gh.post(pull_request["labels_url"], data=["needs review"])
-
-
 async def handle_request(request):
     try:
         body = await request.read()
-        secret = os.environ.get("GH_SECRET")
+        secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
         event = sansio.Event.from_http(request.headers, body, secret=secret)
         print('GH delivery ID', event.delivery_id, file=sys.stderr)
         if event.event == "ping":
             return web.Response(status=200)
-        oauth_token = os.environ.get("GH_AUTH")
+        oauth_token = os.environ.get("GITHUB_PERSONAL_TOKEN")
         async with aiohttp.ClientSession() as session:
             gh = gh_aiohttp.GitHubAPI(session, "rchain/rchain", oauth_token=oauth_token, cache=cache)
             # Give GitHub some time to reach internal consistency.
