@@ -1,0 +1,89 @@
+- name: Install Python
+  become: yes
+  package:
+    name: python3-dev
+    state: present
+
+- name: Install PIP
+  become: yes
+  package:
+    name: python3-pip
+    state: present
+
+- name: Create user
+  become: yes
+  user:
+    name: "{{ rhobot_user }}"
+    create_home: yes
+    shell: /bin/bash
+
+- name: Install pipenv
+  become: yes
+  become_user: "{{ rhobot_user }}"
+  shell: python3 -m pip install --user pipenv
+
+- name: Create checkout dir
+  become: yes
+  file:
+    path: "{{ rhobot_checkout_dir }}"
+    state: directory
+    group: "{{ deployers_group }}"
+    mode: u=rwx,g=rwx,o=r
+
+- name: Checkout runtime files
+  git:
+    repo: "{{ rhobot_repo_url }}"
+    clone: yes
+    update: yes
+    force: yes
+    dest: "{{ rhobot_checkout_dir }}"
+    version: "{{ checkout_commit | default('master') }}"
+
+- name: Fix files ownership
+  become: yes
+  file:
+    path: "{{ rhobot_checkout_dir }}"
+    owner: "{{ rhobot_user }}"
+    recurse: yes
+
+- name: Set up Python environment
+  become: yes
+  become_user: "{{ rhobot_user }}"
+  shell: ~/.local/bin/pipenv sync
+  args:
+    chdir: "{{ rhobot_checkout_dir }}/rhobot"
+
+- name: Download Drone CLI client
+  become: yes
+  become_user: "{{ rhobot_user }}"
+  shell: curl --silent --show-error --location https://github.com/drone/drone-cli/releases/download/v1.0.7/drone_linux_amd64.tar.gz | tar zx
+  args:
+    chdir: "/home/{{ rhobot_user }}/.local/bin"
+
+- name: Render environment file
+  template:
+    src: rhobot.env.j2
+    dest: "{{ rhobot_checkout_dir }}/rhobot.env"
+
+- name: Render systemd unit file
+  become: yes
+  template:
+    src: rhobot.service.j2
+    dest: /etc/systemd/system/rhobot.service
+
+- name: Register systemd unit
+  become: yes
+  systemd:
+    daemon_reload: true
+
+- name: Run systemd unit at boot
+  become: yes
+  systemd:
+    name: rhobot
+    enabled: yes
+
+- name: Restart systemd unit
+  become: yes
+  systemd:
+    name: rhobot
+    state: restarted

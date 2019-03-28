@@ -1,0 +1,12 @@
+[Unit]
+Requires=docker.service
+After=docker.service
+
+[Service]
+User={{ rhobot_user }}
+EnvironmentFile={{ rhobot_checkout_dir }}/rhobot.env
+WorkingDirectory={{ rhobot_checkout_dir }}/rhobot
+ExecStart=/home/{{ rhobot_user }}/.local/bin/pipenv run {{ rhobot_checkout_dir }}/rhobot/rhobot.py
+
+[Install]
+WantedBy=multi-user.target
