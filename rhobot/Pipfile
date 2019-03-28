@@ -9,7 +9,6 @@ python-language-server = "*"
 [packages]
 gidgethub = "*"
 aiohttp = "==1.0.5"
-cachetools = "*"
 loguru = "*"
 
 [requires]
