@@ -65,11 +65,11 @@ async def try_handle_request(request):
 
 
 async def handle_health(request):
-    return web.Response(status=200)
+    return web.Response(status=200, text='Bleep Bloop')
 
 
 if __name__ == "__main__":
     app = web.Application()
-    app.router.add_get("/health", handle_health)
+    app.router.add_get("/health/", handle_health)
     app.router.add_post("/", try_handle_request)
     web.run_app(app, port=9090)
