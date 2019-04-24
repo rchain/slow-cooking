@@ -15,23 +15,54 @@ from gidgethub import routing
 from gidgethub import sansio
 
 
-def get_last_build_number():
+def drone_command(drone_server, drone_token, args):
     drone_cmd = os.environ['DRONE_CMD']
-    command = [drone_cmd, 'build', 'ls', '--format={{.Number}}', '--limit=1', 'rchain/slow-cooking']
-    output = subprocess.check_output(command)
-    return int(output.decode().strip())
+    env = {
+        'DRONE_SERVER': drone_server,
+        'DRONE_TOKEN':  drone_token,
+    }
+    command = [drone_cmd] + args
+    output = subprocess.check_output(command, env=env)
+    return output.decode()
 
 
-def start_drone_build(logger_context, proto_build_number):
-    drone_cmd = os.environ['DRONE_CMD']
-    command = [drone_cmd, 'build', 'restart', 'rchain/slow-cooking', str(proto_build_number)]
-    output = subprocess.check_output(command)
-    logger_context.info(output.decode().strip())
+def get_last_drone_build_number(drone_server, drone_token, repo):
+    output = drone_command(
+        drone_server,
+        drone_token,
+        ['build', 'ls', '--format={{.Number}}', '--limit=1', repo],
+    )
+    return int(output.strip())
+
+
+def restart_drone_build(drone_server, drone_token, repo, build_number):
+    output = drone_command(
+        drone_server,
+        drone_token,
+        ['build', 'restart', repo, str(build_number)],
+    )
+    logger_context.info(output.strip())
+
+
+def restart_last_drone_build(drone_server, drone_token, repo):
+    last_build_number = get_last_drone_build_number(drone_server, drone_token, repo)
+    return restart_drone_build(drone_server, drone_token, repo, last_build_number)
 
 
 async def pushed_to_dev(logger_context, event):
-    last_build_number = get_last_build_number()
-    start_drone_build(logger_context, last_build_number)
+    slow_cooker_output = restart_last_drone_build(
+        os.environ['SLOW_COOKING_DRONE_SERVER'],
+        os.environ['SLOW_COOKING_DRONE_TOKEN'],
+        'rchain/slow-cooking',
+    )
+    logger_context.info(slow_cooker_output)
+
+    perf_harness_output = restart_last_drone_build(
+        os.environ['PERF_HARNESS_DRONE_SERVER'],
+        os.environ['PERF_HARNESS_DRONE_TOKEN'],
+        'rchain/perf-harness',
+    )
+    logger_context.info(perf_harness_output)
 
 
 async def handle_request(request, secret, oauth_token):
