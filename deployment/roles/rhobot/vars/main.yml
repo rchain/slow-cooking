@@ -47,5 +47,4 @@ drone_token: !vault |
 
 rhobot_user: rhobot
 rhobot_checkout_dir: /opt/rhobot
-rhobot_repo_url: https://github.com/rchain/slow-cooking.git
 deployers_group: google-sudoers

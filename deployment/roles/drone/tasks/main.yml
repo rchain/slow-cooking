@@ -21,14 +21,19 @@
     group: "{{ deployers_group }}"
     mode: u=rwx,g=rwx,o=r
 
-- name: Checkout runtime files
-  git:
-    repo: "{{ deployment_repo }}"
-    clone: yes
-    update: yes
-    force: yes
+- name: Copy runtime files
+  become: yes
+  synchronize:
+    src: "{{ playbook_dir }}/../"
     dest: "{{ drone_checkout_dir }}"
-    version: "{{ drone_checkout_commit }}"
+    archive: no
+    checksum: yes
+    recursive: yes
+    delete: yes
+    perms: no
+    owner: no
+    group: no
+    rsync_opts: --exclude=.git
 
 - name: Render drone.env
   template:
