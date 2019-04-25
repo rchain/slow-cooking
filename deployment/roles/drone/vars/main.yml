@@ -52,7 +52,6 @@ drone_host: !vault |
           6632336336386636356465633562343866353030613833356565
 
 
-deployment_repo: https://github.com/rchain/slow-cooking
-drone_checkout_dir: /opt/drone
-drone_checkout_commit: "{{ checkout_commit | default('master') }}"
 drone_user: drone
+drone_checkout_dir: /opt/drone
+deployers_group: google-sudoers

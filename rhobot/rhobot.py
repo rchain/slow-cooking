@@ -6,6 +6,11 @@ import importlib
 import traceback
 import subprocess
 
+from typing import (
+    Any,
+    List,
+)
+
 from loguru import logger
 import aiohttp
 from aiohttp import web
@@ -15,26 +20,57 @@ from gidgethub import routing
 from gidgethub import sansio
 
 
-def get_last_build_number():
+def drone_command(drone_server: str, drone_token: str, args: List[str]) -> str:
     drone_cmd = os.environ['DRONE_CMD']
-    command = [drone_cmd, 'build', 'ls', '--format={{.Number}}', '--limit=1', 'rchain/slow-cooking']
-    output = subprocess.check_output(command)
-    return int(output.decode().strip())
+    env = {
+        'DRONE_SERVER': drone_server,
+        'DRONE_TOKEN':  drone_token,
+    }
+    command = [drone_cmd] + args
+    output = subprocess.check_output(command, env=env)
+    return output.decode()
 
 
-def start_drone_build(logger_context, proto_build_number):
-    drone_cmd = os.environ['DRONE_CMD']
-    command = [drone_cmd, 'build', 'restart', 'rchain/slow-cooking', str(proto_build_number)]
-    output = subprocess.check_output(command)
-    logger_context.info(output.decode().strip())
+def get_last_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
+    output = drone_command(
+        drone_server,
+        drone_token,
+        ['build', 'ls', '--format={{.Number}}', '--limit=1', repo],
+    )
+    return int(output.strip())
 
 
-async def pushed_to_dev(logger_context, event):
-    last_build_number = get_last_build_number()
-    start_drone_build(logger_context, last_build_number)
+def restart_drone_build(drone_server: str, drone_token: str, repo: str, build_number: int) -> str:
+    output = drone_command(
+        drone_server,
+        drone_token,
+        ['build', 'restart', repo, str(build_number)],
+    )
+    return output.strip()
 
 
-async def handle_request(request, secret, oauth_token):
+def restart_last_drone_build(drone_server: str, drone_token: str, repo: str) -> str:
+    last_build_number = get_last_drone_build_number(drone_server, drone_token, repo)
+    return restart_drone_build(drone_server, drone_token, repo, last_build_number)
+
+
+async def pushed_to_dev(logger_context: Any, event: Any) -> None:
+    slow_cooker_output = restart_last_drone_build(
+        os.environ['SLOW_COOKING_DRONE_SERVER'],
+        os.environ['SLOW_COOKING_DRONE_TOKEN'],
+        'rchain/slow-cooking',
+    )
+    logger_context.info(slow_cooker_output)
+
+    perf_harness_output = restart_last_drone_build(
+        os.environ['PERF_HARNESS_DRONE_SERVER'],
+        os.environ['PERF_HARNESS_DRONE_TOKEN'],
+        'rchain/perf-harness',
+    )
+    logger_context.info(perf_harness_output)
+
+
+async def handle_request(request: Any, secret: Any, oauth_token: Any) -> Any:
     body = await request.read()
 
     event = sansio.Event.from_http(request.headers, body, secret=secret)
@@ -51,7 +87,7 @@ async def handle_request(request, secret, oauth_token):
     return web.Response(status=200)
 
 
-async def try_handle_request(request):
+async def try_handle_request(request: Any) -> Any:
     github_webhook_secret = os.environ['GITHUB_WEBHOOK_SECRET']
     github_personal_token = os.environ['GITHUB_PERSONAL_TOKEN']
 
@@ -64,12 +100,12 @@ async def try_handle_request(request):
     return web.Response(status=200)
 
 
-async def handle_health(request):
-    return web.Response(status=200)
+async def handle_health(request: Any) -> Any:
+    return web.Response(status=200, text='Bleep Bloop')
 
 
 if __name__ == "__main__":
     app = web.Application()
-    app.router.add_get("/health", handle_health)
+    app.router.add_get("/health/", handle_health)
     app.router.add_post("/", try_handle_request)
     web.run_app(app, port=9090)
