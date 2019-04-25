@@ -6,6 +6,11 @@ import importlib
 import traceback
 import subprocess
 
+from typing import (
+    Any,
+    List,
+)
+
 from loguru import logger
 import aiohttp
 from aiohttp import web
@@ -15,7 +20,7 @@ from gidgethub import routing
 from gidgethub import sansio
 
 
-def drone_command(drone_server, drone_token, args):
+def drone_command(drone_server: str, drone_token: str, args: List[str]) -> str:
     drone_cmd = os.environ['DRONE_CMD']
     env = {
         'DRONE_SERVER': drone_server,
@@ -26,7 +31,7 @@ def drone_command(drone_server, drone_token, args):
     return output.decode()
 
 
-def get_last_drone_build_number(drone_server, drone_token, repo):
+def get_last_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
     output = drone_command(
         drone_server,
         drone_token,
@@ -35,21 +40,21 @@ def get_last_drone_build_number(drone_server, drone_token, repo):
     return int(output.strip())
 
 
-def restart_drone_build(drone_server, drone_token, repo, build_number):
+def restart_drone_build(drone_server: str, drone_token: str, repo: str, build_number: int) -> str:
     output = drone_command(
         drone_server,
         drone_token,
         ['build', 'restart', repo, str(build_number)],
     )
-    logger_context.info(output.strip())
+    return output.strip()
 
 
-def restart_last_drone_build(drone_server, drone_token, repo):
+def restart_last_drone_build(drone_server: str, drone_token: str, repo: str) -> str:
     last_build_number = get_last_drone_build_number(drone_server, drone_token, repo)
     return restart_drone_build(drone_server, drone_token, repo, last_build_number)
 
 
-async def pushed_to_dev(logger_context, event):
+async def pushed_to_dev(logger_context: Any, event: Any) -> None:
     slow_cooker_output = restart_last_drone_build(
         os.environ['SLOW_COOKING_DRONE_SERVER'],
         os.environ['SLOW_COOKING_DRONE_TOKEN'],
@@ -65,7 +70,7 @@ async def pushed_to_dev(logger_context, event):
     logger_context.info(perf_harness_output)
 
 
-async def handle_request(request, secret, oauth_token):
+async def handle_request(request: Any, secret: Any, oauth_token: Any) -> Any:
     body = await request.read()
 
     event = sansio.Event.from_http(request.headers, body, secret=secret)
@@ -82,7 +87,7 @@ async def handle_request(request, secret, oauth_token):
     return web.Response(status=200)
 
 
-async def try_handle_request(request):
+async def try_handle_request(request: Any) -> Any:
     github_webhook_secret = os.environ['GITHUB_WEBHOOK_SECRET']
     github_personal_token = os.environ['GITHUB_PERSONAL_TOKEN']
 
@@ -95,7 +100,7 @@ async def try_handle_request(request):
     return web.Response(status=200)
 
 
-async def handle_health(request):
+async def handle_health(request: Any) -> Any:
     return web.Response(status=200, text='Bleep Bloop')
 
 
