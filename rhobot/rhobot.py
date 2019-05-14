@@ -14,6 +14,7 @@ from typing import (
 
 import loguru
 from loguru import logger
+from loguru._logger import Logger
 import aiohttp
 from aiohttp import web
 import cachetools
@@ -57,7 +58,7 @@ def restart_last_drone_build(drone_server: str, drone_token: str, repo: str) -> 
     return restart_drone_build(drone_server, drone_token, repo, last_build_number)
 
 
-async def pushed_to_dev(logger_context: loguru.Logger, event: sansio.Event) -> None:
+async def pushed_to_dev(logger_context: Logger, event: sansio.Event) -> None:
     slow_cooker_output = restart_last_drone_build(
         os.environ['SLOW_COOKING_DRONE_SERVER'],
         os.environ['SLOW_COOKING_DRONE_TOKEN'],
@@ -84,14 +85,12 @@ def start_drone_build(contract_file_basename: str, commit_sha: str, repo_url: st
         drone_token,
         [
             'build',
-            'promote',
-            '--format={{.Number}}',
+            'restart',
             '--param=CONTRACT=/workdir/rchain-perf-harness/{}'.format(contract_file_basename),
             '--param=RCHAIN_COMMIT_HASH={}'.format(commit_sha),
             '--param=RCHAIN_REPO={}'.format(repo_url),
             'rchain/perf-harness',
             str(last_build_number),
-            'custom_commit',
         ],
     )
     return output.strip()
@@ -113,9 +112,9 @@ async def is_collaborator(github: gh_aiohttp.GitHubAPI, owner: str, repo: str, u
         return False
 
 
-async def rhobot_try(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, contract_file_basename: str) -> None:
-    pull_request_url = event.data['pull_request']['url']
-    pull_request = github.getitem(pull_request_url)
+async def rhobot_try(logger_context: Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, contract_file_basename: str) -> None:
+    pull_request_url = event.data['issue']['pull_request']['url']
+    pull_request = await github.getitem(pull_request_url)
     commit_sha = pull_request['head']['sha']
     repo_url = pull_request['head']['repo']['clone_url']
     user = event.data['issue']['user']['login']
@@ -129,7 +128,7 @@ async def rhobot_try(logger_context: loguru.Logger, event: sansio.Event, github:
     logger_context.info(output)
 
 
-async def comment_appeared(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, comment: str) -> None:
+async def comment_appeared(logger_context: Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, comment: str) -> None:
     if len(comment.splitlines()) > 1:
         return
     stripped = comment.strip()
@@ -140,12 +139,12 @@ async def comment_appeared(logger_context: loguru.Logger, event: sansio.Event, g
         return
     if fields[1].lower() != 'try':
         return
-    contract_file_basename = fields[3]
+    contract_file_basename = fields[2]
     logger_context.info('Got command: {}', fields)
-    rhobot_try(logger_context, event, github, contract_file_basename)
+    await rhobot_try(logger_context, event, github, contract_file_basename)
 
 
-async def issue_comment(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI) -> None:
+async def issue_comment(logger_context: Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI) -> None:
     if event.data['action'] == 'created':
         body = event.data['comment']['body']
         await comment_appeared(logger_context, event, github, body)
@@ -160,20 +159,18 @@ async def handle_webhook(request: Any, secret: str, oauth_token: str) -> Any:
     event = sansio.Event.from_http(request.headers, body, secret=secret)
 
     if event.event == 'ping':
-        logger_context = logger.bind(delivery_id=event.delivery_id, event=event.event)
-        logger_context.info('Got event')
+        logger_context.info('Got event: {}', event.delivery_id)
         if event.event == 'ping':
             return web.Response(status=200)
 
     if event.event == 'push':
-        logger_context = logger.bind(delivery_id=event.delivery_id, event=event.event, ref=event.data['ref'])
-        logger_context.info('Got event')
+        logger_context.info('Got event: {}', event.delivery_id)
         if event.data['ref'] == 'refs/heads/dev':
             await pushed_to_dev(logger_context, event)
 
     if event.event == 'issue_comment':
         logger_context = logger.bind(delivery_id=event.delivery_id, event=event.event)
-        logger_context.info('Got event')
+        logger_context.info('Got event: {}', event.delivery_id)
         async with aiohttp.ClientSession() as session:
             github = gh_aiohttp.GitHubAPI(session, 'rchain/rchain', oauth_token=oauth_token)
             await issue_comment(logger_context, event, github)
@@ -188,7 +185,7 @@ async def try_handle_webhook(request: Any) -> Any:
     try:
         await handle_webhook(request, github_webhook_secret, github_personal_token)
     except Exception as exc:
-        logger.exception('Exception while handling request')
+        logger.exception('Exception while handling webhook')
         return web.Response(status=500)
 
     return web.Response(status=200)
