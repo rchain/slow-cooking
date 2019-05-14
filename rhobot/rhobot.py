@@ -130,6 +130,8 @@ async def rhobot_try(logger_context: loguru.Logger, event: sansio.Event, github:
 
 
 async def comment_appeared(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, comment: str) -> None:
+    if len(comment.splitlines()) > 1:
+        return
     stripped = comment.strip()
     fields = re.split('\s+', stripped, 2)
     if len(fields) < 3:
