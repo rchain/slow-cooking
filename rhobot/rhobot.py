@@ -17,6 +17,7 @@ from loguru import logger
 import aiohttp
 from aiohttp import web
 import cachetools
+import gidgethub
 from gidgethub import aiohttp as gh_aiohttp
 from gidgethub import routing
 from gidgethub import sansio
@@ -96,12 +97,36 @@ def start_drone_build(contract_file_basename: str, commit_sha: str, repo_url: st
     return output.strip()
 
 
-async def rhobot_try(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, contract_file_basename: str) -> str:
+async def is_collaborator(github: gh_aiohttp.GitHubAPI, owner: str, repo: str, user: str) -> bool:
+    # This is a bit of an obscure way that implements checking whether user is
+    # a collaborator of a given repository:
+    # https://developer.github.com/v3/repos/collaborators/#check-if-a-user-is-a-collaborator
+
+    try:
+        await github.getitem('/repos/{owner}/{repo}/collaborators/{user}'.format(
+            owner=owner,
+            repo=repo,
+            user=user,
+        ))
+        return True
+    except gidgethub.BadRequest:
+        return False
+
+
+async def rhobot_try(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, contract_file_basename: str) -> None:
     pull_request_url = event.data['pull_request']['url']
     pull_request = github.getitem(pull_request_url)
     commit_sha = pull_request['head']['sha']
     repo_url = pull_request['head']['repo']['clone_url']
-    return start_drone_build(contract_file_basename, commit_sha, repo_url)
+    user = event.data['issue']['user']['login']
+
+    # Only allow collaborators to start Drone jobs
+    if not await is_collaborator(github, 'rchain', 'rchain', user):
+        logger_context.info('Ignoring a non-collaborator user: {}', user)
+        return
+
+    output = start_drone_build(contract_file_basename, commit_sha, repo_url)
+    logger_context.info(output)
 
 
 async def comment_appeared(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, comment: str) -> None:
@@ -114,6 +139,7 @@ async def comment_appeared(logger_context: loguru.Logger, event: sansio.Event, g
     if fields[1].lower() != 'try':
         return
     contract_file_basename = fields[3]
+    logger_context.info('Got command: {}', fields)
     rhobot_try(logger_context, event, github, contract_file_basename)
 
 
@@ -147,7 +173,7 @@ async def handle_webhook(request: Any, secret: str, oauth_token: str) -> Any:
         logger_context = logger.bind(delivery_id=event.delivery_id, event=event.event)
         logger_context.info('Got event')
         async with aiohttp.ClientSession() as session:
-            github = gh_aiohttp.GitHubAPI(session, 'rchain/rchain', oauth_token)
+            github = gh_aiohttp.GitHubAPI(session, 'rchain/rchain', oauth_token=oauth_token)
             await issue_comment(logger_context, event, github)
 
     return web.Response(status=200)

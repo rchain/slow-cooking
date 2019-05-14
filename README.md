@@ -45,3 +45,8 @@ server {
 
 This may be confusing as `issue_comments` events are trigerred whenever a
 comment is being made in a pull request.
+
+2) [Generate a personal access token](https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line)
+
+The token needs to have the 'repo' permission enabled.  This is required for
+checking whether a pull request author is a collaborator.
