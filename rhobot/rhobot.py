@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import re
 import os
 import sys
 import asyncio
@@ -11,6 +12,7 @@ from typing import (
     List,
 )
 
+import loguru
 from loguru import logger
 import aiohttp
 from aiohttp import web
@@ -54,7 +56,7 @@ def restart_last_drone_build(drone_server: str, drone_token: str, repo: str) -> 
     return restart_drone_build(drone_server, drone_token, repo, last_build_number)
 
 
-async def pushed_to_dev(logger_context: Any, event: Any) -> None:
+async def pushed_to_dev(logger_context: loguru.Logger, event: sansio.Event) -> None:
     slow_cooker_output = restart_last_drone_build(
         os.environ['SLOW_COOKING_DRONE_SERVER'],
         os.environ['SLOW_COOKING_DRONE_TOKEN'],
@@ -70,29 +72,93 @@ async def pushed_to_dev(logger_context: Any, event: Any) -> None:
     logger_context.info(perf_harness_output)
 
 
-async def handle_request(request: Any, secret: Any, oauth_token: Any) -> Any:
+def start_drone_build(contract_file_basename: str, commit_sha: str, repo_url: str) -> str:
+    drone_server = os.environ['PERF_HARNESS_DRONE_SERVER']
+    drone_token = os.environ['PERF_HARNESS_DRONE_TOKEN']
+
+    last_build_number = get_last_drone_build_number(drone_server, drone_token, 'rchain/perf-harness')
+
+    output = drone_command(
+        drone_server,
+        drone_token,
+        [
+            'build',
+            'promote',
+            '--format={{.Number}}',
+            '--param=CONTRACT=/workdir/rchain-perf-harness/{}'.format(contract_file_basename),
+            '--param=RCHAIN_COMMIT_HASH={}'.format(commit_sha),
+            '--param=RCHAIN_REPO={}'.format(repo_url),
+            'rchain/perf-harness',
+            str(last_build_number),
+            'custom_commit',
+        ],
+    )
+    return output.strip()
+
+
+async def rhobot_try(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, contract_file_basename: str) -> str:
+    pull_request_url = event.data['pull_request']['url']
+    pull_request = github.getitem(pull_request_url)
+    commit_sha = pull_request['head']['sha']
+    repo_url = pull_request['head']['repo']['clone_url']
+    return start_drone_build(contract_file_basename, commit_sha, repo_url)
+
+
+async def comment_appeared(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI, comment: str) -> None:
+    stripped = comment.strip()
+    fields = re.split('\s+', stripped, 2)
+    if len(fields) < 3:
+        return
+    if fields[0].lower() != 'rhobot':
+        return
+    if fields[1].lower() != 'try':
+        return
+    contract_file_basename = fields[3]
+    rhobot_try(logger_context, event, github, contract_file_basename)
+
+
+async def issue_comment(logger_context: loguru.Logger, event: sansio.Event, github: gh_aiohttp.GitHubAPI) -> None:
+    if event.data['action'] == 'created':
+        body = event.data['comment']['body']
+        await comment_appeared(logger_context, event, github, body)
+    elif event.data['action'] == 'edited':
+        body = event.data['comment']['body']
+        await comment_appeared(logger_context, event, github, body)
+
+
+async def handle_webhook(request: Any, secret: str, oauth_token: str) -> Any:
     body = await request.read()
 
     event = sansio.Event.from_http(request.headers, body, secret=secret)
 
-    logger_context = logger.bind(delivery_id=event.delivery_id, event=event.event, ref=event.data['ref'])
-    logger_context.info('Got event')
     if event.event == 'ping':
-        return web.Response(status=200)
+        logger_context = logger.bind(delivery_id=event.delivery_id, event=event.event)
+        logger_context.info('Got event')
+        if event.event == 'ping':
+            return web.Response(status=200)
 
-    async with aiohttp.ClientSession() as session:
-        if event.event == 'push' and event.data['ref'] == 'refs/heads/dev':
+    if event.event == 'push':
+        logger_context = logger.bind(delivery_id=event.delivery_id, event=event.event, ref=event.data['ref'])
+        logger_context.info('Got event')
+        if event.data['ref'] == 'refs/heads/dev':
             await pushed_to_dev(logger_context, event)
+
+    if event.event == 'issue_comment':
+        logger_context = logger.bind(delivery_id=event.delivery_id, event=event.event)
+        logger_context.info('Got event')
+        async with aiohttp.ClientSession() as session:
+            github = gh_aiohttp.GitHubAPI(session, 'rchain/rchain', oauth_token)
+            await issue_comment(logger_context, event, github)
 
     return web.Response(status=200)
 
 
-async def try_handle_request(request: Any) -> Any:
+async def try_handle_webhook(request: Any) -> Any:
     github_webhook_secret = os.environ['GITHUB_WEBHOOK_SECRET']
     github_personal_token = os.environ['GITHUB_PERSONAL_TOKEN']
 
     try:
-        await handle_request(request, github_webhook_secret, github_personal_token)
+        await handle_webhook(request, github_webhook_secret, github_personal_token)
     except Exception as exc:
         logger.exception('Exception while handling request')
         return web.Response(status=500)
@@ -107,5 +173,5 @@ async def handle_health(request: Any) -> Any:
 if __name__ == "__main__":
     app = web.Application()
     app.router.add_get("/health/", handle_health)
-    app.router.add_post("/", try_handle_request)
+    app.router.add_post("/", try_handle_webhook)
     web.run_app(app, port=9090)

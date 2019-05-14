@@ -38,3 +38,10 @@ server {
     }
 }
 ```
+
+### Rhobot for trigerring perf harness builds from GitHub pull requests
+
+1) Enable `Issue comments` events at https://github.com/rchain/rchain/settings/hooks/
+
+This may be confusing as `issue_comments` events are trigerred whenever a
+comment is being made in a pull request.
