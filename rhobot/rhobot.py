@@ -190,6 +190,8 @@ async def handle_webhook(request: web.Request, secret: str, oauth_token: str) ->
 
 
 async def try_handle_webhook(request: web.Request) -> web.Response:
+    # pylint: disable=broad-except
+
     github_webhook_secret = os.environ['GITHUB_WEBHOOK_SECRET']
     github_personal_token = os.environ['GITHUB_PERSONAL_TOKEN']
 
@@ -205,6 +207,7 @@ async def handle_health(_: web.Request) -> web.Response:
 
 
 if __name__ == "__main__":
+    # pylint: disable=invalid-name
     app = web.Application()
     app.router.add_get("/health/", handle_health)
     app.router.add_post("/", try_handle_webhook)
