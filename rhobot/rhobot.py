@@ -31,11 +31,11 @@ def drone_command(drone_server: str, drone_token: str, args: List[str]) -> str:
     return output.decode()
 
 
-def get_last_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
+def get_last_deployment_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
     output = drone_command(
         drone_server,
         drone_token,
-        ['build', 'ls', '--format={{.Number}}', '--limit=1', repo],
+        ['build', 'ls', '--event=deployment', '--limit=1', '--format={{.Number}}', repo],
     )
     return int(output.strip())
 
@@ -50,7 +50,7 @@ def restart_drone_build(drone_server: str, drone_token: str, repo: str, build_nu
 
 
 def restart_last_drone_build(drone_server: str, drone_token: str, repo: str) -> str:
-    last_build_number = get_last_drone_build_number(drone_server, drone_token, repo)
+    last_build_number = get_last_deployment_drone_build_number(drone_server, drone_token, repo)
     return restart_drone_build(drone_server, drone_token, repo, last_build_number)
 
 
@@ -74,7 +74,7 @@ def start_drone_build(contract_file_basename: str, commit_sha: str, repo_url: st
     drone_server = os.environ['PERF_HARNESS_DRONE_SERVER']
     drone_token = os.environ['PERF_HARNESS_DRONE_TOKEN']
 
-    last_build_number = get_last_drone_build_number(drone_server, drone_token, 'rchain/perf-harness')
+    last_build_number = get_last_deployment_drone_build_number(drone_server, drone_token, 'rchain/perf-harness')
 
     output = drone_command(
         drone_server,
