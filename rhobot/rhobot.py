@@ -20,6 +20,10 @@ class MalformedDroneOutputError(ValueError):
     pass
 
 
+class NoPreviousBuild(ValueError):
+    pass
+
+
 def drone_command(drone_server: str, drone_token: str, args: List[str]) -> str:
     drone_cmd = os.environ['DRONE_CMD']
     env = {
@@ -37,7 +41,22 @@ def get_last_deployment_drone_build_number(drone_server: str, drone_token: str, 
         drone_token,
         ['build', 'ls', '--event=deployment', '--limit=1', '--format={{.Number}}', repo],
     )
-    return int(output.strip())
+    stripped = output.strip()
+    if stripped == '':
+        raise NoPreviousBuild()
+    return int(stripped)
+
+
+def get_last_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
+    output = drone_command(
+        drone_server,
+        drone_token,
+        ['build', 'ls', '--limit=1', '--format={{.Number}}', repo],
+    )
+    stripped = output.strip()
+    if stripped == '':
+        raise NoPreviousBuild()
+    return int(stripped)
 
 
 def restart_drone_build(drone_server: str, drone_token: str, repo: str, build_number: int) -> str:
@@ -49,23 +68,30 @@ def restart_drone_build(drone_server: str, drone_token: str, repo: str, build_nu
     return output.strip()
 
 
-def restart_last_drone_build(drone_server: str, drone_token: str, repo: str) -> str:
-    last_build_number = get_last_deployment_drone_build_number(drone_server, drone_token, repo)
-    return restart_drone_build(drone_server, drone_token, repo, last_build_number)
-
-
 async def pushed_to_dev(logger_context: Logger) -> None:
-    slow_cooker_output = restart_last_drone_build(
+    last_slow_cooking_build_number = get_last_drone_build_number(
         os.environ['SLOW_COOKING_DRONE_SERVER'],
         os.environ['SLOW_COOKING_DRONE_TOKEN'],
         'rchain/slow-cooking',
     )
-    logger_context.info(slow_cooker_output)
+    slow_cooking_output = restart_drone_build(
+        os.environ['SLOW_COOKING_DRONE_SERVER'],
+        os.environ['SLOW_COOKING_DRONE_TOKEN'],
+        'rchain/slow-cooking',
+        last_slow_cooking_build_number,
+    )
+    logger_context.info(slow_cooking_output)
 
-    perf_harness_output = restart_last_drone_build(
+    last_perf_harness_build_number = get_last_deployment_drone_build_number(
         os.environ['PERF_HARNESS_DRONE_SERVER'],
         os.environ['PERF_HARNESS_DRONE_TOKEN'],
         'rchain/perf-harness',
+    )
+    perf_harness_output = restart_drone_build(
+        os.environ['PERF_HARNESS_DRONE_SERVER'],
+        os.environ['PERF_HARNESS_DRONE_TOKEN'],
+        'rchain/perf-harness',
+        last_perf_harness_build_number,
     )
     logger_context.info(perf_harness_output)
 
