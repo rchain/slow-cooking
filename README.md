@@ -50,3 +50,5 @@ comment is being made in a pull request.
 
 The token needs to have the 'repo' permission enabled.  This is required for
 checking whether a pull request author is a collaborator.
+
+Use a separate GitHub account preferably, like https://github.com/rchain-service.
