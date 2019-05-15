@@ -38,3 +38,17 @@ server {
     }
 }
 ```
+
+### Rhobot for trigerring perf harness builds from GitHub pull requests
+
+1) Enable `Issue comments` events at https://github.com/rchain/rchain/settings/hooks/
+
+This may be confusing as `issue_comments` events are trigerred whenever a
+comment is being made in a pull request.
+
+2) [Generate a personal access token](https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line)
+
+The token needs to have the 'repo' permission enabled.  This is required for
+checking whether a pull request author is a collaborator.
+
+Use a separate GitHub account preferably, like https://github.com/rchain-service.
