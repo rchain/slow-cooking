@@ -1,26 +1,18 @@
 #!/usr/bin/env python
 import re
 import os
-import sys
-import asyncio
-import importlib
-import traceback
 import subprocess
 
 from typing import (
-    Any,
     List,
 )
 
-import loguru
 from loguru import logger
 from loguru._logger import Logger
 import aiohttp
 from aiohttp import web
-import cachetools
 import gidgethub
 from gidgethub import aiohttp as gh_aiohttp
-from gidgethub import routing
 from gidgethub import sansio
 
 
@@ -62,7 +54,7 @@ def restart_last_drone_build(drone_server: str, drone_token: str, repo: str) -> 
     return restart_drone_build(drone_server, drone_token, repo, last_build_number)
 
 
-async def pushed_to_dev(logger_context: Logger, event: sansio.Event) -> None:
+async def pushed_to_dev(logger_context: Logger) -> None:
     slow_cooker_output = restart_last_drone_build(
         os.environ['SLOW_COOKING_DRONE_SERVER'],
         os.environ['SLOW_COOKING_DRONE_TOKEN'],
@@ -152,7 +144,7 @@ async def comment_appeared(logger_context: Logger, event: sansio.Event, github: 
     if len(comment.splitlines()) > 1:
         return
     stripped = comment.strip()
-    fields = re.split('\s+', stripped, 2)
+    fields = re.split(r'\s+', stripped, 2)
     if len(fields) < 3:
         return
     if fields[0].lower() != 'rhobot':
@@ -173,7 +165,7 @@ async def issue_comment(logger_context: Logger, event: sansio.Event, github: gh_
         await comment_appeared(logger_context, event, github, body)
 
 
-async def handle_webhook(request: Any, secret: str, oauth_token: str) -> Any:
+async def handle_webhook(request: web.Request, secret: str, oauth_token: str) -> web.Response:
     body = await request.read()
 
     event = sansio.Event.from_http(request.headers, body, secret=secret)
@@ -186,7 +178,7 @@ async def handle_webhook(request: Any, secret: str, oauth_token: str) -> Any:
     if event.event == 'push':
         logger.info('Got event: {}', event.delivery_id)
         if event.data['ref'] == 'refs/heads/dev':
-            await pushed_to_dev(logger, event)
+            await pushed_to_dev(logger)
 
     if event.event == 'issue_comment':
         logger.info('Got event: {}', event.delivery_id)
@@ -197,20 +189,18 @@ async def handle_webhook(request: Any, secret: str, oauth_token: str) -> Any:
     return web.Response(status=200)
 
 
-async def try_handle_webhook(request: Any) -> Any:
+async def try_handle_webhook(request: web.Request) -> web.Response:
     github_webhook_secret = os.environ['GITHUB_WEBHOOK_SECRET']
     github_personal_token = os.environ['GITHUB_PERSONAL_TOKEN']
 
     try:
-        await handle_webhook(request, github_webhook_secret, github_personal_token)
-    except Exception as exc:
+        return await handle_webhook(request, github_webhook_secret, github_personal_token)
+    except Exception:
         logger.exception('Exception while handling webhook')
         return web.Response(status=500)
 
-    return web.Response(status=200)
 
-
-async def handle_health(request: Any) -> Any:
+async def handle_health(_: web.Request) -> web.Response:
     return web.Response(status=200, text='Bleep Bloop')
 
 
