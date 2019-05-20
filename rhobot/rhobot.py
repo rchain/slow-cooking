@@ -47,7 +47,7 @@ def restart_drone_build(drone_server: str, drone_token: str, repo: str, build_nu
     output = drone_command(
         drone_server,
         drone_token,
-        ['build', 'restart', repo, str(build_number)],
+        ['build', 'start', repo, str(build_number)],
     )
     return output.strip()
 
