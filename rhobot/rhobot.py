@@ -35,18 +35,6 @@ def drone_command(drone_server: str, drone_token: str, args: List[str]) -> str:
     return output.decode()
 
 
-def get_last_deployment_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
-    output = drone_command(
-        drone_server,
-        drone_token,
-        ['build', 'ls', '--event=deployment', '--limit=1', '--format={{.Number}}', repo],
-    )
-    stripped = output.strip()
-    if stripped == '':
-        raise NoPreviousBuild()
-    return int(stripped)
-
-
 def get_last_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
     output = drone_command(
         drone_server,
@@ -82,7 +70,7 @@ async def pushed_to_dev(logger_context: Logger) -> None:
     )
     logger_context.info(slow_cooking_output)
 
-    last_perf_harness_build_number = get_last_deployment_drone_build_number(
+    last_perf_harness_build_number = get_last_drone_build_number(
         os.environ['PERF_HARNESS_DRONE_SERVER'],
         os.environ['PERF_HARNESS_DRONE_TOKEN'],
         'rchain/perf-harness',
@@ -100,19 +88,19 @@ def start_drone_build(contract_file_basename: str, commit_sha: str, repo_url: st
     drone_server = os.environ['PERF_HARNESS_DRONE_SERVER']
     drone_token = os.environ['PERF_HARNESS_DRONE_TOKEN']
 
-    last_build_number = get_last_deployment_drone_build_number(drone_server, drone_token, 'rchain/perf-harness')
+    last_build_number = get_last_drone_build_number(drone_server, drone_token, 'rchain/perf-harness')
 
     output = drone_command(
         drone_server,
         drone_token,
         [
-            'build',
-            'restart',
+            'deploy',
             '--param=CONTRACT=/workdir/rchain-perf-harness/{}'.format(contract_file_basename),
             '--param=RCHAIN_COMMIT_HASH={}'.format(commit_sha),
             '--param=RCHAIN_REPO={}'.format(repo_url),
             'rchain/perf-harness',
             str(last_build_number),
+            'custom_commit',
         ],
     )
     return output.strip()

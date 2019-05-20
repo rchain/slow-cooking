@@ -61,7 +61,7 @@
 - name: Download Drone CLI client
   become: yes
   become_user: "{{ rhobot_user }}"
-  shell: curl --silent --show-error --location https://github.com/drone/drone-cli/releases/download/v1.0.7/drone_linux_amd64.tar.gz | tar zx
+  shell: curl --silent --show-error --location https://github.com/drone/drone-cli/releases/download/v0.8.6/drone_linux_amd64.tar.gz | tar zx
   args:
     chdir: "/home/{{ rhobot_user }}/.local/bin"
 
