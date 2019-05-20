@@ -16,10 +16,6 @@ from gidgethub import aiohttp as gh_aiohttp
 from gidgethub import sansio
 
 
-class MalformedDroneOutputError(ValueError):
-    pass
-
-
 class NoPreviousBuild(ValueError):
     pass
 
@@ -33,18 +29,6 @@ def drone_command(drone_server: str, drone_token: str, args: List[str]) -> str:
     command = [drone_cmd] + args
     output = subprocess.check_output(command, env=env)
     return output.decode()
-
-
-def get_last_deployment_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
-    output = drone_command(
-        drone_server,
-        drone_token,
-        ['build', 'ls', '--event=deployment', '--limit=1', '--format={{.Number}}', repo],
-    )
-    stripped = output.strip()
-    if stripped == '':
-        raise NoPreviousBuild()
-    return int(stripped)
 
 
 def get_last_drone_build_number(drone_server: str, drone_token: str, repo: str) -> int:
@@ -82,7 +66,7 @@ async def pushed_to_dev(logger_context: Logger) -> None:
     )
     logger_context.info(slow_cooking_output)
 
-    last_perf_harness_build_number = get_last_deployment_drone_build_number(
+    last_perf_harness_build_number = get_last_drone_build_number(
         os.environ['PERF_HARNESS_DRONE_SERVER'],
         os.environ['PERF_HARNESS_DRONE_TOKEN'],
         'rchain/perf-harness',
@@ -96,26 +80,27 @@ async def pushed_to_dev(logger_context: Logger) -> None:
     logger_context.info(perf_harness_output)
 
 
-def start_drone_build(contract_file_basename: str, commit_sha: str, repo_url: str) -> str:
+def start_drone_build(contract_file_basename: str, commit_sha: str, repo_url: str) -> int:
     drone_server = os.environ['PERF_HARNESS_DRONE_SERVER']
     drone_token = os.environ['PERF_HARNESS_DRONE_TOKEN']
 
-    last_build_number = get_last_deployment_drone_build_number(drone_server, drone_token, 'rchain/perf-harness')
+    last_build_number = get_last_drone_build_number(drone_server, drone_token, 'rchain/perf-harness')
 
     output = drone_command(
         drone_server,
         drone_token,
         [
-            'build',
-            'restart',
+            'deploy',
             '--param=CONTRACT=/workdir/rchain-perf-harness/{}'.format(contract_file_basename),
             '--param=RCHAIN_COMMIT_HASH={}'.format(commit_sha),
             '--param=RCHAIN_REPO={}'.format(repo_url),
+            '--format={{ .Number }}',
             'rchain/perf-harness',
             str(last_build_number),
+            'custom_commit',
         ],
     )
-    return output.strip()
+    return int(output.strip())
 
 
 async def is_collaborator(github: gh_aiohttp.GitHubAPI, owner: str, repo: str, user: str) -> bool:
@@ -134,13 +119,10 @@ async def is_collaborator(github: gh_aiohttp.GitHubAPI, owner: str, repo: str, u
         return False
 
 
-def get_build_url_from_restart_output(output: str) -> str:
-    match = re.match('^Starting build (?P<repo>.*)#(?P<build>.*)', output)
-    if match is None:
-        raise MalformedDroneOutputError(output)
-    result = 'https://drone.perf.rchain-dev.tk/{repo}/{build}'.format(
-        repo=match.group('repo'),
-        build=match.group('build'),
+def make_build_url(repo: str, build_number: int) -> str:
+    result = 'https://drone.perf.rchain-dev.tk/{repo}/{build_number}'.format(
+        repo=repo,
+        build_number=build_number,
     )
     return result
 
@@ -157,10 +139,10 @@ async def rhobot_try(logger_context: Logger, event: sansio.Event, github: gh_aio
         logger_context.info('Ignoring a non-collaborator user: {}', user)
         return
 
-    output = start_drone_build(contract_file_basename, commit_sha, repo_url)
-    logger_context.info(output)
+    build_number = start_drone_build(contract_file_basename, commit_sha, repo_url)
+    logger_context.info(build_number)
 
-    build_url = get_build_url_from_restart_output(output)
+    build_url = make_build_url('rchain/perf-harness', build_number)
     comments_url = event.data['issue']['comments_url']
     await github.post(comments_url, data={'body': build_url})
 
