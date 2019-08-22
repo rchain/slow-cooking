@@ -30,6 +30,9 @@ drone_host: !vault |
           64303733666236356630346439636536343239333237373633623731326439626136
 
 
+drone_admin: adaszko
+
+
 drone_user: drone
 drone_checkout_dir: /opt/drone
 deployers_group: google-sudoers

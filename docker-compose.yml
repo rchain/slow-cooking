@@ -17,6 +17,7 @@ services:
       - DRONE_RUNNER_CAPACITY=2
       - DRONE_SERVER_HOST=${DRONE_SERVER_HOST}
       - DRONE_SERVER_PROTO=https
+      - DRONE_USER_CREATE=${DRONE_USER_CREATE}
 
 networks:
   default:
