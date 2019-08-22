@@ -1,32 +1,31 @@
-__buildenv: &buildenv
-  image: rchain/buildenv:latest
+---
+kind: pipeline
+name: default
 
-
-__sbtcompileenv: &sbtcompileenv
-  <<: *buildenv
-  environment:
-    - _JAVA_OPTIONS=-Xms2G -Xmx4G -Xss2m -XX:MaxMetaspaceSize=1G
-                    -Dsbt.task.timings=true -Dsbt.task.timings.on.shutdown=true -Dsbt.task.timings.threshold=2000
-  volumes:
-    - /var/cache/rchain-build/.sbt:/root/.sbt
-    - /var/cache/rchain-build/.ivy2:/root/.ivy2
-
+platform:
+  os: linux
+  arch: amd64
 
 clone:
-  git-clone:
-    <<: *buildenv
-    commands:
-      - git clone --branch=dev https://github.com/rchain/rchain.git .
-      - git rev-parse HEAD
+  disable: true
 
+steps:
+- name: git-clone
+  image: rchain/buildenv:latest
+  commands:
+  - git clone --branch=dev https://github.com/rchain/rchain.git .
+  - git rev-parse HEAD
 
-pipeline:
-  compile:
-    <<: *sbtcompileenv
-    commands:
-      - sbt update rholang/bnfc:generate test:compile
+- name: compile
+  image: rchain/buildenv:latest
+  environment:
+    _JAVA_OPTIONS: -Xms2G -Xmx4G -Xss2m -XX:MaxMetaspaceSize=1G -Dsbt.task.timings=true -Dsbt.task.timings.on.shutdown=true -Dsbt.task.timings.threshold=2000
+  commands:
+  - sbt update rholang/bnfc:generate test:compile
 
-  slowcooker:
-    <<: *sbtcompileenv
-    commands:
-      - sbt slowcooker:test
+- name: slowcooker
+  image: rchain/buildenv:latest
+  environment:
+    _JAVA_OPTIONS: -Xms2G -Xmx4G -Xss2m -XX:MaxMetaspaceSize=1G -Dsbt.task.timings=true -Dsbt.task.timings.on.shutdown=true -Dsbt.task.timings.threshold=2000
+  commands:
+  - sbt slowcooker:test
