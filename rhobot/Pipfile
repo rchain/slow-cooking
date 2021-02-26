@@ -9,7 +9,7 @@ mypy = "*"
 
 [packages]
 gidgethub = "*"
-aiohttp = "==1.0.5"
+aiohttp = "==3.7.4"
 loguru = "*"
 
 [requires]
